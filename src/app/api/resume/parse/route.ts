@@ -29,18 +29,18 @@ export async function POST(req: Request) {
       }
     }
 
-    const { text } = await req.json()
+    const { text, pdfBase64 } = await req.json()
     
-    console.log('[Resume API] Text length:', text?.length || 0)
+    console.log('[Resume API] Received request - text length:', text?.length || 0, 'pdfBase64 length:', pdfBase64?.length || 0)
     
-    if (!text || text.trim().length < 30) {
-      // Very short text — return default schema with user's name
+    if ((!text || text.trim().length < 30) && !pdfBase64) {
+      // Very short text and no PDF — return default schema with user's name
       return NextResponse.json(portfolioDataSchema.parse({ full_name: user.user_metadata?.full_name || '' }))
     }
 
     let result
     try {
-      result = await parseResumeWithGemini(text)
+      result = await parseResumeWithGemini(text, pdfBase64)
     } catch (geminiError: any) {
       console.error('[Resume API] Gemini parsing failed:', geminiError.message)
       // Return default structure if AI fails — don't block the flow

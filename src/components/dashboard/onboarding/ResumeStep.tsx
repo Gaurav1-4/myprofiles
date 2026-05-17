@@ -35,14 +35,23 @@ export function ResumeStep({ onNext, onSkip }: ResumeStepProps) {
     setIsUploading(true)
 
     try {
-      // 1. Extract text client-side
-      const text = await extractTextFromPDF(selectedFile)
+      // 1. Read PDF as base64 to send raw document to Gemini for flawless native multimodal extraction
+      const reader = new FileReader()
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1] || '') // Strip data URL prefix
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(selectedFile)
+      })
+      const pdfBase64 = await base64Promise
       
       // 2. Send to AI API
       const response = await fetch('/api/resume/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ pdfBase64 }),
       })
 
       if (!response.ok) {

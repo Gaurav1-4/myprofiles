@@ -13,7 +13,7 @@ function getGenAI() {
 // Models to try in order — if one hits rate limit, fall back to next
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
 
-async function tryGenerate(text: string, modelName: string) {
+async function tryGenerate(text: string, pdfBase64: string | undefined, modelName: string) {
   const model = getGenAI().getGenerativeModel({ 
     model: modelName,
     generationConfig: {
@@ -23,22 +23,35 @@ async function tryGenerate(text: string, modelName: string) {
     }
   })
 
-  const result = await model.generateContent([
-    { text: SYSTEM_PROMPT },
-    { text: `Here is the full resume text. Extract EVERY detail:\n\n---\n${text}\n---` }
-  ])
+  // If we have a base64 PDF, use Gemini's native multimodal capabilities
+  // which is infinitely better than parsing text manually!
+  const promptParts: any[] = [{ text: SYSTEM_PROMPT }]
+  
+  if (pdfBase64) {
+    promptParts.push({ text: 'Here is the resume document. Extract EVERY detail explicitly present in it:' })
+    promptParts.push({
+      inlineData: {
+        data: pdfBase64,
+        mimeType: 'application/pdf'
+      }
+    })
+  } else {
+    promptParts.push({ text: `Here is the full resume text. Extract EVERY detail:\n\n---\n${text}\n---` })
+  }
+
+  const result = await model.generateContent(promptParts)
   
   return result.response.text()
 }
 
-export async function parseResumeWithGemini(text: string) {
+export async function parseResumeWithGemini(text: string, pdfBase64?: string) {
   let lastError: any = null
 
   for (const modelName of MODELS) {
     try {
       console.log(`[Gemini] Trying model: ${modelName}`)
       
-      const rawText = await tryGenerate(text, modelName)
+      const rawText = await tryGenerate(text, pdfBase64, modelName)
       console.log(`[Gemini] ${modelName} response length:`, rawText.length)
       
       const data = JSON.parse(rawText)
