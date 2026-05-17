@@ -67,11 +67,11 @@ export async function parseResumeWithGemini(text: string, pdfBase64?: string) {
         hasLinks: !!data.links,
       })
       
-      return portfolioDataSchema.partial().parse(data)
+      return data
     } catch (error: any) {
       lastError = error
       const isRateLimit = error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED') || error.message?.includes('quota')
-      console.warn(`[Gemini] ${modelName} failed:`, isRateLimit ? '429 Rate Limited' : error.message?.substring(0, 100))
+      console.warn(`[Gemini] ${modelName} failed:`, isRateLimit ? '429 Rate Limited' : error.message?.substring(0, 500))
       
       if (isRateLimit) {
         // Wait before trying next model
