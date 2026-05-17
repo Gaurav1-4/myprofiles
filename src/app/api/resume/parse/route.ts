@@ -5,10 +5,19 @@ import { portfolioDataSchema } from '@/lib/validations/portfolio.schema'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-const ratelimit = process.env.UPSTASH_REDIS_REST_URL 
+const ratelimitDaily = process.env.UPSTASH_REDIS_REST_URL 
   ? new Ratelimit({
       redis: Redis.fromEnv(),
       limiter: Ratelimit.slidingWindow(10, '1 d'), // 10 parses per day per user
+      prefix: 'ratelimit:resume:daily',
+    })
+  : null
+
+const ratelimitHourly = process.env.UPSTASH_REDIS_REST_URL 
+  ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(3, '1 h'), // 3 parses per hour per user
+      prefix: 'ratelimit:resume:hourly',
     })
   : null
 
@@ -21,11 +30,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 1. Rate Limiting by User ID
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(user.id)
-      if (!success) {
-        return NextResponse.json({ error: 'Daily parse limit reached. Try again tomorrow.' }, { status: 429 })
+    // 1. Rate Limiting by User ID (Hourly & Daily)
+    if (ratelimitHourly && ratelimitDaily) {
+      const { success: hourlySuccess } = await ratelimitHourly.limit(user.id)
+      if (!hourlySuccess) {
+        return NextResponse.json({ error: 'Hourly parse limit reached (max 3/hr). Try again later.' }, { status: 429 })
+      }
+
+      const { success: dailySuccess } = await ratelimitDaily.limit(user.id)
+      if (!dailySuccess) {
+        return NextResponse.json({ error: 'Daily parse limit reached (max 10/day). Try again tomorrow.' }, { status: 429 })
       }
     }
 
